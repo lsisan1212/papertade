@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paper Trade Dashboard — 量化策略模擬盤</title>
+<script src="vendor/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0d1117; --bg2:#161b22; --bg3:#1c2128; --line:#30363d;
+    --fg:#e6edf3; --fg2:#9198a1; --fg3:#6e7681;
+    --accent:#58a6ff; --up:#f85149; --down:#3fb950; --warn:#d29922;
+    --long:#3fb950; --short:#f85149; --idle:#6e7681;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);
+    font:13px/1.5 -apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC","Segoe UI",sans-serif}
+  a{color:var(--accent)}
+  header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;
+    padding:12px 18px;border-bottom:1px solid var(--line);background:var(--bg2);position:sticky;top:0;z-index:20}
+  header h1{font-size:15px;margin:0;font-weight:600;letter-spacing:.2px}
+  header .sub{color:var(--fg3);font-size:12px;font-family:var(--mono)}
+  header .spacer{flex:1}
+  .pill{background:var(--bg3);border:1px solid var(--line);border-radius:999px;
+    padding:2px 10px;font-size:11px;color:var(--fg2);font-family:var(--mono)}
+  .layout{display:grid;grid-template-columns:288px 1fr;min-height:calc(100vh - 49px)}
+  aside{border-right:1px solid var(--line);background:var(--bg2);padding:10px;overflow-y:auto;max-height:calc(100vh - 49px);position:sticky;top:49px}
+  main{padding:14px 18px 40px;min-width:0}
+  h2{font-size:12px;text-transform:uppercase;letter-spacing:.8px;color:var(--fg3);margin:14px 0 8px;font-weight:600}
+  h2:first-child{margin-top:2px}
+  .btnrow{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+  button{background:var(--bg3);color:var(--fg2);border:1px solid var(--line);border-radius:6px;
+    padding:4px 9px;font-size:11.5px;cursor:pointer;font-family:inherit}
+  button:hover{background:#262c36;color:var(--fg)}
+  button.on{background:#1f6feb22;border-color:var(--accent);color:var(--accent)}
+  select,input{background:var(--bg3);color:var(--fg);border:1px solid var(--line);border-radius:6px;
+    padding:3px 6px;font-size:11.5px;font-family:inherit}
+  input[type=number]{width:52px;text-align:right}
+  .lbl{font-size:11.5px;color:var(--fg3)}
+  .item{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:6px;cursor:pointer;user-select:none}
+  .item:hover{background:var(--bg3)}
+  .item .sw{width:10px;height:10px;border-radius:2px;flex:none}
+  .item .nm{flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .item .mt{font-family:var(--mono);font-size:10.5px;color:var(--fg3);flex:none}
+  .item.pending{opacity:.45;cursor:not-allowed}
+  .item.pending .nm{font-style:italic}
+  .item.focus{box-shadow:inset 2px 0 0 var(--accent)}
+  .grp{margin:10px 0 3px;font-size:10.5px;color:var(--fg3);letter-spacing:.6px;
+    text-transform:uppercase;border-top:1px solid var(--line);padding-top:8px}
+  .grp:first-child{border-top:none;padding-top:0;margin-top:0}
+  .panel{background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:12px}
+  .chartwrap{position:relative;height:300px}
+  .chartwrap.mid{height:130px}
+  .chartcap{font-size:11.5px;color:var(--fg2);margin:8px 0 4px;font-family:var(--mono)}
+  .chartcap b{color:var(--fg)}
+  table{width:100%;border-collapse:collapse;font-size:12px;font-family:var(--mono)}
+  th,td{padding:5px 8px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+  th:first-child,td:first-child{text-align:left;font-family:inherit}
+  thead th{position:sticky;top:0;background:var(--bg2);cursor:pointer;color:var(--fg2);font-weight:600;z-index:2}
+  thead th:hover{color:var(--fg)}
+  thead th.sorted::after{content:" ▾";color:var(--accent)}
+  thead th.sorted.asc::after{content:" ▴"}
+  tbody tr:hover{background:#1f6feb18}
+  tbody tr.dim{opacity:.35}
+  tbody tr.focus{box-shadow:inset 2px 0 0 var(--accent)}
+  th.btcol,td.btcol{background:rgba(88,166,255,.06)}
+  th.btcol{color:var(--accent)}
+  .pos{color:var(--up)} .neg{color:var(--down)}
+  .muted{color:var(--fg3)}
+  .tag{display:inline-block;font-size:10px;padding:1px 6px;border-radius:4px;
+    background:var(--bg3);border:1px solid var(--line);color:var(--fg3);font-family:var(--mono)}
+  .hint{font-size:11.5px;color:var(--fg3);margin:6px 0 0}
+  @media(max-width:900px){.layout{grid-template-columns:1fr}aside{position:static;max-height:none}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Paper Trade Dashboard</h1>
+  <span class="sub">position-mgmt · 模擬盤</span>
+  <span class="spacer"></span>
+  <span class="pill" id="genAt">–</span>
+  <span class="pill" id="cnt">–</span>
+</header>
+
+<div class="layout">
+  <aside>
+    <h2>策略選擇</h2>
+    <div class="btnrow">
+      <button data-sel="all">全選</button>
+      <button data-sel="none">清空</button>
+      <button data-sel="orig">原裝</button>
+      <button data-sel="nf">nf_*</button>
+      <button data-sel="f100">f100</button>
+    </div>
+    <div id="list"></div>
+    <p class="hint" id="asideHint"></p>
+  </aside>
+
+  <main>
+    <div class="panel">
+      <div class="btnrow">
+        <span class="lbl">顯示最佳</span>
+        <input id="topN" type="number" value="5" min="1" max="23">
+        <span class="lbl">個（按</span>
+        <select id="bestBy">
+          <option value="ret">實盤累積報酬</option>
+          <option value="bt_apy">回測 APY</option>
+          <option value="bt_nav">回測 NAV</option>
+          <option value="sharpe">實盤 Sharpe</option>
+          <option value="apy">實盤 APY(樣本)</option>
+        </select>
+        <span class="lbl">）</span>
+        <button id="applyBest">套用</button>
+        <span class="spacer" style="flex:1"></span>
+        <span class="lbl">時間範圍</span>
+        <button data-range="all">全部</button>
+        <button data-range="90">90 天</button>
+        <button data-range="30" class="on">30 天</button>
+        <button data-range="7">7 天</button>
+        <span class="lbl">Y 軸</span>
+        <button data-ymode="log" class="on">淨值倍數 (log)</button>
+        <button data-ymode="pct">淨值 %</button>
+      </div>
+      <div class="btnrow">
+        <span class="lbl">焦點帳戶（下方兩個面板只畫佢）</span>
+        <select id="focusSel"></select>
+      </div>
+
+      <div class="chartcap">① 淨值走勢 <span class="muted">（全部已選，左軸）</span> ＋ <span style="color:#565e68">灰虛線＝焦點帳戶回撤 %（右軸）</span> — <b id="capNavFocus">–</b></div>
+      <div class="chartwrap"><canvas id="cNav"></canvas></div>
+
+      <div class="chartcap">② 倉位佔比：<b id="capRatioAcc">–</b> — 多 / 空 / 閒置（佔帳戶淨值）</div>
+      <div class="chartwrap mid"><canvas id="cRatio"></canvas></div>
+
+      <div class="chartcap">③ 持幣數量：<b id="capCoinAcc">–</b> — 多頭選幣 / 空頭選幣</div>
+      <div class="chartwrap mid"><canvas id="cCoins"></canvas></div>
+
+      <p class="hint" id="chartHint"></p>
+    </div>
+
+    <div class="panel">
+      <h2 style="margin-top:0">指標表 <span class="muted" style="text-transform:none;letter-spacing:0">（點欄位排序 · 點列＝只看該策略並設為焦點）</span></h2>
+      <div style="overflow-x:auto"><table id="tbl"><thead></thead><tbody></tbody></table></div>
+      <p class="hint" id="tblHint"></p>
+    </div>
+  </main>
+</div>
+
+<script>
+const PALETTE = ["#58a6ff","#f85149","#3fb950","#d29922","#bc8cff","#39c5cf","#ff7b72","#7ee787",
+                 "#ffa657","#a5d6ff","#f778ba","#56d364","#e3b341","#79c0ff","#ff9492","#8ddb8c",
+                 "#d2a8ff","#76e3ea","#ffc078","#b3f0b3","#ffb3d9","#a0e0a0","#ffe08a","#9ecbff"];
+// 線型（同色系／相近色都可以靠 pattern 分開）— 按「已選次序」分配，保證前幾條一定唔同樣
+const DASHES = [[], [8,3], [2,2], [12,3,3,3], [5,2,1,2], [1,3], [10,4,2,4], [3,2], [14,3,3,3,3,3], [6,3,2,3]];
+const dashFor = (i) => DASHES[i % DASHES.length];
+// 顏色同樣按「已選次序」抽，但用一個打散的 index 序列 → 頭幾條色相差最遠
+const SPREAD = [0,4,2,8,10,5,3,1,16,7,11,13,6,12,15,9,14,17,18,20,21,22,23,19];
+let orderMap = {};
+const COL_LONG = "#3fb950", COL_SHORT = "#f85149", COL_IDLE = "#6e7681";
+
+const RANGES = {"all":null,"90":90,"30":30,"7":7};
+let S = [];        // strategies
+let EQ = {};       // id -> series
+let META = {};
+let selected = new Set();
+let focusId = null;
+let rangeKey = "30";        // 預設近 30 天（線條太密，長窗口用 log 軸都唔夠清）
+let sortKey = "nav", sortAsc = false;
+let navChart = null, ratioChart = null, coinsChart = null;
+
+const $ = (s) => document.querySelector(s);
+const pct = (v, d=2) => (v===null||v===undefined||isNaN(v)) ? "–" : (v*100).toFixed(d)+"%";
+const num = (v, d=4) => (v===null||v===undefined||isNaN(v)) ? "–" : Number(v).toFixed(d);
+const cls = (v) => v>0 ? "pos" : (v<0 ? "neg" : "muted");
+const fmtDate = (ts) => { const d=new Date(ts);
+  const p=(x)=>String(x).padStart(2,"0");
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; };
+const fmtDateShort = (ts) => { const d=new Date(ts);
+  const p=(x)=>String(x).padStart(2,"0");
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; };
+
+function rebuildOrder(){
+  orderMap = {};
+  S.filter(s=>s.status==="ok" && selected.has(s.id)).forEach((s,i)=>{ orderMap[s.id] = i; });
+}
+function colorOf(id){
+  if(id in orderMap) return PALETTE[SPREAD[orderMap[id] % SPREAD.length]];
+  const i = S.findIndex(s=>s.id===id);          // 未選中的（側欄未 highlight）用回固定序
+  return PALETTE[SPREAD[(i<0?0:i) % SPREAD.length]];
+}
+const stOf = (id) => S.find(s=>s.id===id);
+const okList = () => S.filter(s=>s.status==="ok");
+
+// ---------------------------------------------------------------- 序列
+function buildPts(id, key){
+  const e = EQ[id]; if(!e || !e.dt) return [];
+  const n = e.dt.length, out = [];
+  for(let i=0;i<n;i++){
+    let y = null;
+    if(key==="navpct")      y = (e.nav[i]-1)*100;
+    else if(key==="nav")    y = e.nav[i];
+    else if(key==="dd")     y = (e.dd && e.dd[i]!==null) ? e.dd[i]*100 : null;
+    else if(key==="lr")     y = e.lr && e.lr.length ? e.lr[i] : null;
+    else if(key==="sr")     y = e.sr && e.sr.length ? e.sr[i] : null;
+    else if(key==="er")     y = e.er && e.er.length ? e.er[i] : null;
+    else if(key==="nl")     y = e.nl && e.nl.length ? e.nl[i] : null;
+    else if(key==="ns")     y = e.ns && e.ns.length ? e.ns[i] : null;
+    if(y===null || y===undefined || Number.isNaN(y)) continue;
+    out.push({x:(e.t0 + e.dt[i]*3600)*1000, y:y});
+  }
+  return out;
+}
+function cutRange(pts){
+  const days = RANGES[rangeKey];
+  if(!days || !pts.length) return pts;
+  const end = pts[pts.length-1].x, cut = end - days*86400000;
+  return pts.filter(p=>p.x>=cut);
+}
+const P = (id,key) => cutRange(buildPts(id,key));
+
+function xScale(){
+  return {type:"linear", grid:{color:"#21262d"},
+    ticks:{color:"#6e7681", font:{size:10}, maxRotation:0, autoSkip:true, maxTicksLimit:9,
+           callback:(v)=> fmtDateShort(v)}};
+}
+function basePlugins(unitFmt){
+  return {
+    legend:{labels:{color:"#9198a1", boxWidth:10, boxHeight:10, font:{size:11}}},
+    tooltip:{backgroundColor:"#1c2128", borderColor:"#30363d", borderWidth:1,
+      titleColor:"#e6edf3", bodyColor:"#c9d1d9", padding:8,
+      callbacks:{
+        title:(it)=> it.length ? fmtDate(it[0].parsed.x) : "",
+        label:(it)=> ` ${it.dataset.label}  ${unitFmt(it.parsed.y)}`
+      }}
+  };
+}
+
+// ---------------------------------------------------------------- 側欄
+function renderList(){
+  rebuildOrder();
+  const box = $("#list"); box.innerHTML = "";
+  const groups = [["orig","原裝"],["nf","多空中性 nf_*"],["f100","論壇 f100"],["other","其他"]];
+  for(const [g,label] of groups){
+    const items = S.filter(s=>s.group===g);
+    if(!items.length) continue;
+    const h = document.createElement("div"); h.className="grp"; h.textContent = label+" ("+items.length+")";
+    box.appendChild(h);
+    for(const s of items){
+      const d = document.createElement("div");
+      const pending = s.status!=="ok";
+      d.className = "item" + (pending?" pending":"") +
+                    (selected.has(s.id)?"":" dim") + (s.id===focusId?" focus":"");
+      const m = s.metrics, b = s.backtest;
+      const mt = pending
+        ? (b ? `回測 ${(b.apy*100).toFixed(0)}%` : "未開始")
+        : `${(m.nav).toFixed(3)} / ${(m.cagr_on_sample*100).toFixed(0)}%`;
+      d.innerHTML = `<span class="sw" style="background:${pending?'#484f58':colorOf(s.id)}"></span>
+                     <span class="nm" title="${s.id}${b?'　回測 NAV '+Number(b.nav).toLocaleString():''}">${s.label}</span>
+                     <span class="mt ${pending?'':cls(m&&m.total_return)}">${mt}</span>`;
+      if(!pending){
+        d.onclick = () => {
+          if(selected.has(s.id)) selected.delete(s.id); else selected.add(s.id);
+          if(!selected.has(focusId)) focusId = selected.has(s.id) ? s.id : (selected.values().next().value || null);
+          renderAll();
+        };
+        if(selected.has(s.id)) d.style.background = "#1f6feb18";
+      }
+      box.appendChild(d);
+    }
+  }
+  $("#asideHint").textContent =
+    `可選 ${okList().length} 個 · 已選 ${selected.size} 個 · 焦點 ${focusId || "–"}`;
+}
+
+// ---------------------------------------------------------------- 表格
+const COLS = [
+  ["label","策略",(s)=>s.label,false],
+  ["time","時點",(s)=>s.time,false],
+  ["bt_nav","回測 NAV",(s)=>s.backtest?s.backtest.nav:null,true,"bt"],
+  ["bt_apy","回測 APY",(s)=>s.backtest?s.backtest.apy:null,true,"bt"],
+  ["bt_mdd","回測 MDD",(s)=>s.backtest?s.backtest.mdd:null,true,"bt"],
+  ["bt_sharpe","回測 Sharpe",(s)=>s.backtest?s.backtest.sharpe:null,true,"bt"],
+  ["nav","實盤 NAV",(s)=>s.metrics?s.metrics.nav:null,true],
+  ["total_return","實盤累積",(s)=>s.metrics?s.metrics.total_return:null,true],
+  ["mdd","實盤 MDD",(s)=>s.metrics?s.metrics.mdd:null,true],
+  ["cagr_on_sample","實盤 APY(樣本)",(s)=>s.metrics?s.metrics.cagr_on_sample:null,true],
+  ["sharpe","實盤 Sharpe",(s)=>s.metrics?s.metrics.sharpe:null,true],
+  ["vol_ann","年化波動",(s)=>s.metrics?s.metrics.vol_ann:null,true],
+  ["dd_now","當前回撤",(s)=>s.metrics?s.metrics.dd_now:null,true],
+  ["cost_usdt","費用+資金費",(s)=>s.metrics?s.metrics.cost_usdt:null,true],
+  ["turnover_x","週轉(x)",(s)=>s.metrics?s.metrics.turnover_x:null,true],
+  ["avg_lev","平均槓桿",(s)=>s.metrics?s.metrics.avg_lev:null,true],
+  ["avg_lsr","平均多空比",(s)=>s.metrics?s.metrics.avg_lsr:null,true],
+  ["avg_longs","平均多幣",(s)=>s.metrics?s.metrics.avg_longs:null,true],
+  ["avg_shorts","平均空幣",(s)=>s.metrics?s.metrics.avg_shorts:null,true],
+  ["days","樣本天數",(s)=>s.metrics?s.metrics.days:null,true],
+];
+
+function renderTable(){
+  rebuildOrder();
+  const rows0 = S.filter(s=>s.status==="ok" || s.backtest);
+  rows0.sort((a,b)=>{
+    const f = COLS.find(c=>c[0]===sortKey)[2];
+    let x=f(a), y=f(b);
+    if(typeof x==="string"){ return sortAsc ? x.localeCompare(y) : y.localeCompare(x); }
+    if(x===null||x===undefined) x=-Infinity;
+    if(y===null||y===undefined) y=-Infinity;
+    return sortAsc ? x-y : y-x;
+  });
+  const th = $("#tbl thead"), tb = $("#tbl tbody");
+  th.innerHTML = "<tr>" + COLS.map(c=>
+    `<th data-k="${c[0]}" class="${c[0]===sortKey?'sorted'+(sortAsc?' asc':''):''} ${c[4]==='bt'?'btcol':''}">${c[1]}</th>`).join("") + "</tr>";
+  th.querySelectorAll("th").forEach(el=>{
+    el.onclick = () => { const k = el.dataset.k;
+      if(sortKey===k) sortAsc = !sortAsc; else { sortKey=k; sortAsc=false; }
+      renderTable(); };
+  });
+  tb.innerHTML = rows0.map(s=>{
+    const m = s.metrics, b = s.backtest;
+    const on = selected.has(s.id);
+    const n = (v,d=4)=> (v===null||v===undefined||isNaN(v)) ? "–" : Number(v).toFixed(d);
+    const p = (v,d=2)=> (v===null||v===undefined||isNaN(v)) ? "–" : (v*100).toFixed(d)+"%";
+    const c = (v)=> (v===null||v===undefined||isNaN(v)) ? "muted" : (v>0?"pos":(v<0?"neg":"muted"));
+    return `<tr data-id="${s.id}" class="${on?'':'dim'}${s.id===focusId?' focus':''}">
+      <td><span class="sw" style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${s.status==="ok"?colorOf(s.id):'#484f58'};margin-right:6px"></span>${s.label}</td>
+      <td class="muted">${s.time}</td>
+      <td class="btcol">${n(b&&b.nav,0)}</td>
+      <td class="btcol ${c(b&&b.apy)}">${p(b&&b.apy,1)}</td>
+      <td class="btcol ${c(b&&b.mdd)}">${p(b&&b.mdd,2)}</td>
+      <td class="btcol muted">${n(b&&b.sharpe,2)}</td>
+      <td>${n(m&&m.nav,4)}</td>
+      <td class="${c(m&&m.total_return)}">${p(m&&m.total_return,2)}</td>
+      <td class="${c(m&&m.mdd)}">${p(m&&m.mdd,2)}</td>
+      <td class="${c(m&&m.cagr_on_sample)}">${p(m&&m.cagr_on_sample,1)}</td>
+      <td class="${c(m&&m.sharpe)}">${n(m&&m.sharpe,2)}</td>
+      <td class="muted">${p(m&&m.vol_ann,1)}</td>
+      <td class="${c(m&&m.dd_now)}">${p(m&&m.dd_now,2)}</td>
+      <td class="muted">${n(m&&m.cost_usdt,0)}</td>
+      <td class="muted">${n(m&&m.turnover_x,0)}</td>
+      <td class="muted">${n(m&&m.avg_lev,2)}</td>
+      <td class="muted">${n(m&&m.avg_lsr,2)}</td>
+      <td class="muted">${n(m&&m.avg_longs,0)}</td>
+      <td class="muted">${n(m&&m.avg_shorts,0)}</td>
+      <td class="muted">${n(m&&m.days,0)}</td>
+    </tr>`;
+  }).join("");
+  tb.querySelectorAll("tr").forEach(tr=>{
+    tr.onclick = () => { const id = tr.dataset.id;
+      selected = new Set([id]); focusId = id; renderAll(); };
+  });
+  const nBt = S.filter(s=>s.backtest).length;
+  $("#tblHint").innerHTML =
+    `<b>回測</b>＝首次回測（2021–2026，按 accounts docstring / neutral_ranked.csv），` +
+    `<b>實盤</b>＝模擬盤至今。兩者口徑唔同唔可以直接比。<br>` +
+    `${rows0.length} 行（回測 ${nBt} · 實盤 ${okList().length}） · ` +
+    `排序：${COLS.find(c=>c[0]===sortKey)[1]} ${sortAsc?'升':'降'}`;
+}
+
+// ---------------------------------------------------------------- 圖表
+function renderFocusSel(){
+  const sel = $("#focusSel");
+  const ids = S.filter(s=>s.status==="ok" && selected.has(s.id)).map(s=>s.id);
+  if(focusId && !ids.includes(focusId)) focusId = ids[0] || null;
+  if(!focusId) focusId = ids[0] || null;
+  sel.innerHTML = ids.length
+    ? ids.map(id=>`<option value="${id}"${id===focusId?" selected":""}>${id}</option>`).join("")
+    : `<option value="">（未選策略）</option>`;
+  sel.disabled = !ids.length;
+  $("#capRatioAcc").textContent = focusId || "（未選）";
+  $("#capCoinAcc").textContent  = focusId || "（未選）";
+}
+
+function drawNav(){
+  const ids = S.filter(s=>s.status==="ok" && selected.has(s.id)).map(s=>s.id);
+  const ymode = (document.querySelector("[data-ymode].on") || {}).dataset
+              ? document.querySelector("[data-ymode].on").dataset.ymode : "log";
+  const key = ymode === "log" ? "nav" : "navpct";
+  const sets = [];
+  // 焦點帳戶的回撤放最前（畫在最底層），避免遮住淨值曲線
+  if(focusId && ids.includes(focusId)){
+    sets.push({label: focusId + " 回撤", data: P(focusId,"dd"), borderColor:"#565e68",
+      backgroundColor:"#565e68", borderWidth:0.9, borderDash:[4,3], pointRadius:0, yAxisID:"y1"});
+  }
+  for(let k=0;k<ids.length;k++){
+    const id = ids[k];
+    sets.push({
+      label: id, data: P(id,key), borderColor: colorOf(id), backgroundColor: colorOf(id),
+      borderWidth: 1.5, borderDash: dashFor(k), pointRadius: 0, pointHitRadius: 6,
+      tension: 0, spanGaps: true, yAxisID: "y",
+    });
+  }
+  const yScale = ymode === "log"
+    ? {type:"logarithmic", position:"left", grid:{color:"#21262d"},
+       ticks:{color:"#6e7681", font:{size:10}, callback:(v)=>{
+         if(v>=1) return Number(v).toLocaleString();
+         if(v>=0.1) return Number(v).toFixed(2);
+         return Number(v).toFixed(3);
+       }},
+       title:{display:true, text:"淨值倍數（對數）", color:"#6e7681", font:{size:10}}}
+    : {type:"linear", position:"left", grid:{color:"#21262d"},
+       ticks:{color:"#6e7681", font:{size:10}},
+       title:{display:true, text:"淨值 %（(NAV−1)×100）", color:"#6e7681", font:{size:10}}};
+  const opts = {
+    responsive:true, maintainAspectRatio:false, animation:false,
+    interaction:{mode:"index", intersect:false},
+    plugins: basePlugins(v=> ymode==="log" ? `NAV ${v.toFixed(3)}` : `${v.toFixed(2)}%`),
+    scales:{
+      x: xScale(),
+      y: yScale,
+      y1:{position:"right", grid:{drawOnChartArea:false}, ticks:{color:"#8b949e", font:{size:10}},
+         title:{display:true, text:"回撤 %", color:"#8b949e", font:{size:10}}}
+    }
+  };
+  if(navChart) navChart.destroy();
+  navChart = new Chart($("#cNav"), {type:"line", data:{datasets:sets}, options:opts});
+}
+
+function drawRatio(){
+  if(ratioChart){ ratioChart.destroy(); ratioChart = null; }
+  if(!focusId) return;
+  const sets = [
+    {label:"多 Long",  data:P(focusId,"lr"), borderColor:COL_LONG,  backgroundColor:"#3fb95099",
+     borderWidth:0.8, fill:"origin", stack:"r", pointRadius:0},
+    {label:"空 Short", data:P(focusId,"sr"), borderColor:COL_SHORT, backgroundColor:"#f8514999",
+     borderWidth:0.8, fill:"-1", stack:"r", pointRadius:0},
+    {label:"閒置",     data:P(focusId,"er"), borderColor:COL_IDLE,  backgroundColor:"#484f5899",
+     borderWidth:0.8, fill:"-1", stack:"r", pointRadius:0},
+  ];
+  const opts = {
+    responsive:true, maintainAspectRatio:false, animation:false,
+    interaction:{mode:"index", intersect:false},
+    plugins: basePlugins(v=> (v*100).toFixed(1)+"%"),
+    scales:{
+      x: xScale(),
+      y:{stacked:true, min:0, grid:{color:"#21262d"}, ticks:{color:"#6e7681", font:{size:10}},
+         title:{display:true, text:"佔淨值比", color:"#6e7681", font:{size:10}}}
+    }
+  };
+  ratioChart = new Chart($("#cRatio"), {type:"line", data:{datasets:sets}, options:opts});
+}
+
+function drawCoins(){
+  if(coinsChart){ coinsChart.destroy(); coinsChart = null; }
+  if(!focusId) return;
+  const sets = [
+    {label:"多頭選幣", data:P(focusId,"nl"), borderColor:COL_LONG,  backgroundColor:COL_LONG,
+     borderWidth:1.2, pointRadius:0, tension:0},
+    {label:"空頭選幣", data:P(focusId,"ns"), borderColor:COL_SHORT, backgroundColor:COL_SHORT,
+     borderWidth:1.2, pointRadius:0, tension:0},
+  ];
+  const opts = {
+    responsive:true, maintainAspectRatio:false, animation:false,
+    interaction:{mode:"index", intersect:false},
+    plugins: basePlugins(v=> v.toFixed(0)+" 個"),
+    scales:{
+      x: xScale(),
+      y:{beginAtZero:true, grid:{color:"#21262d"}, ticks:{color:"#6e7681", font:{size:10}, precision:0},
+         title:{display:true, text:"幣數", color:"#6e7681", font:{size:10}}}
+    }
+  };
+  coinsChart = new Chart($("#cCoins"), {type:"line", data:{datasets:sets}, options:opts});
+}
+
+function draw(){
+  rebuildOrder();
+  renderFocusSel();
+  drawNav(); drawRatio(); drawCoins();
+  const fs = focusId ? stOf(focusId) : null;
+  const fm = fs && fs.metrics;
+  $("#capNavFocus").textContent = (fs && fm)
+    ? `${fs.id}：NAV ${fm.nav.toFixed(4)}（${(fm.total_return*100).toFixed(2)}%）· MDD ${(fm.mdd*100).toFixed(2)}% · 當前回撤 ${(fm.dd_now*100).toFixed(2)}%`
+    : "（未選焦點）";
+  const n = S.filter(s=>s.status==="ok" && selected.has(s.id)).length;
+  const b = focusId ? EQ[focusId] : null;
+  $("#chartHint").textContent = n
+    ? `${n} 條淨值曲線 · 焦點 ${focusId}${b && b.decimated ? `（曲線抽稀 ${b.kept}/${b.full_bars} 點）` : ""} · 範圍 ${rangeKey==="all"?"全部":rangeKey+" 天"}`
+    : "未選擇任何策略 — 按「套用」取最佳 N 個，或由左邊揀。";
+}
+
+function renderAll(){ renderList(); renderTable(); draw(); }
+
+// ---------------------------------------------------------------- 最佳 N
+const BEST_KEYS = {
+  ret:      s => s.metrics ? s.metrics.total_return : null,
+  apy:      s => s.metrics ? s.metrics.cagr_on_sample : null,
+  sharpe:   s => s.metrics ? s.metrics.sharpe : null,
+  bt_apy:   s => s.backtest ? s.backtest.apy : null,
+  bt_nav:   s => s.backtest ? s.backtest.nav : null,
+};
+function applyBest(){
+  const k = $("#bestBy").value;
+  const N = Math.max(1, Math.min(30, parseInt($("#topN").value, 10) || 5));
+  const f = BEST_KEYS[k] || BEST_KEYS.ret;
+  const ranked = okList().slice().sort((a,b)=>{
+    const x = f(a), y = f(b);
+    return (y===null||y===undefined ? -Infinity : y) - (x===null||x===undefined ? -Infinity : x);
+  });
+  const pick = ranked.slice(0, N).map(s=>s.id);
+  selected = new Set(pick);
+  focusId = pick[0] || null;
+  renderAll();
+}
+
+// ---------------------------------------------------------------- events
+document.querySelectorAll("[data-range]").forEach(b=>{
+  b.onclick = () => { rangeKey = b.dataset.range;
+    document.querySelectorAll("[data-range]").forEach(x=>x.classList.toggle("on", x===b));
+    draw(); };
+});
+document.querySelectorAll("[data-ymode]").forEach(b=>{
+  b.onclick = () => {
+    document.querySelectorAll("[data-ymode]").forEach(x=>x.classList.toggle("on", x===b));
+    drawNav();
+  };
+});
+document.querySelectorAll("[data-sel]").forEach(b=>{
+  b.onclick = () => {
+    const k = b.dataset.sel, ok = okList();
+    if(k==="all") selected = new Set(ok.map(s=>s.id));
+    else if(k==="none") selected = new Set();
+    else selected = new Set(ok.filter(s=>s.group===k).map(s=>s.id));
+    if(!selected.has(focusId)) focusId = selected.values().next().value || null;
+    renderAll();
+  };
+});
+$("#applyBest").onclick = applyBest;
+$("#focusSel").onchange = (e) => { focusId = e.target.value || null; renderAll(); };
+
+// ---------------------------------------------------------------- boot
+(async function(){
+  const [st, eq] = await Promise.all([
+    fetch("data/strategies.json").then(r=>r.json()),
+    fetch("data/equity.json").then(r=>r.json()),
+  ]);
+  S = st.strategies; META = st.meta; EQ = eq.equity;
+  $("#genAt").textContent = "資料時間 " + META.generated_at;
+  $("#cnt").textContent = `實盤 ${META.n_with_data}/${META.n_accounts} · 回測 ${META.n_with_backtest ?? 0}`;
+  // URL 參數：?n=5&by=bt_apy&range=7&ymode=pct&focus=<帳戶>
+  const q = new URLSearchParams(location.search);
+  if(q.get("n")) $("#topN").value = q.get("n");
+  if(q.get("by") && $("#bestBy").querySelector(`option[value="${q.get("by")}"]`)) $("#bestBy").value = q.get("by");
+  if(q.get("range")){ const r=q.get("range"); const b=$(`[data-range="${r}"]`);
+    if(b){ rangeKey=r; document.querySelectorAll("[data-range]").forEach(x=>x.classList.toggle("on", x===b)); } }
+  if(q.get("ymode")){ const m=q.get("ymode"); const b=$(`[data-ymode="${m}"]`);
+    if(b) document.querySelectorAll("[data-ymode]").forEach(x=>x.classList.toggle("on", x===b)); }
+  applyBest();      // 預設：最佳 N 個（按所選指標，預設實盤累積報酬）
+  if(q.get("focus") && EQ[q.get("focus")] && selected.has(q.get("focus"))){
+    focusId = q.get("focus"); renderAll();
+  }
+})();
+</script>
+</body>
+</html>
