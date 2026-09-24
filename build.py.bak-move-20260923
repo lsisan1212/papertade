@@ -33,7 +33,7 @@ import pandas as pd
 # ---------------------------------------------------------------- 路徑
 
 HOME = Path.home()
-BASE = HOME / "Library/Application Support/bnpapertrade"
+BASE = HOME / "Desktop/py/BN/Actual Trading"
 PMT = BASE / "position-mgmt-papertrade"
 LOGS = BASE / "logs"
 RUNNER = LOGS / "daily_papertrade.sh"

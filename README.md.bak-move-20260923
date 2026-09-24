@@ -39,10 +39,10 @@
 ## 資料來源（唯讀）
 
 ```
-~/Library/Application Support/bnpapertrade/position-mgmt-papertrade/data/仓位管理回测结果/<帳戶>/资金曲线.csv
-~/Library/Application Support/bnpapertrade/logs/daily_papertrade.sh        ← ACCOUNTS（權威帳戶清單）
-~/Library/Application Support/bnpapertrade/logs/backtest_metrics.json      ← 首次回測指標（見下）
-~/Library/Application Support/bnpapertrade/position-mgmt-papertrade/accounts/<帳戶檔>.py   ← 策略描述
+~/Desktop/py/BN/Actual Trading/position-mgmt-papertrade/data/仓位管理回测结果/<帳戶>/资金曲线.csv
+~/Desktop/py/BN/Actual Trading/logs/daily_papertrade.sh        ← ACCOUNTS（權威帳戶清單）
+~/Desktop/py/BN/Actual Trading/logs/backtest_metrics.json      ← 首次回測指標（見下）
+~/Desktop/py/BN/Actual Trading/position-mgmt-papertrade/accounts/<帳戶檔>.py   ← 策略描述
 ```
 
 **回測指標**由 `~/Workbuddy/scripts/build_backtest_metrics.py` 產生，來源：
