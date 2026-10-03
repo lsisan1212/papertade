@@ -49,6 +49,7 @@ GROUP_LABEL = {
     "orig": "原裝",
     "nf": "多空中性 nf_*",
     "f100": "論壇 f100",
+    "pl": "倉管帖 ProfitLock",
     "other": "其他",
 }
 
@@ -87,6 +88,8 @@ def classify(name: str) -> str:
         return "f100"
     if "nf_" in name:
         return "nf"
+    if "pl_" in name:          # 2026-10-03 新增：倉管帖 ProfitLock 帳戶
+        return "pl"
     if "氣泡" in name:
         return "orig"
     return "other"

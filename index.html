@@ -92,6 +92,7 @@
       <button data-sel="orig">原裝</button>
       <button data-sel="nf">nf_*</button>
       <button data-sel="f100">f100</button>
+      <button data-sel="pl">倉管</button>
     </div>
     <div id="list"></div>
     <p class="hint" id="asideHint"></p>
@@ -240,7 +241,7 @@ function basePlugins(unitFmt){
 function renderList(){
   rebuildOrder();
   const box = $("#list"); box.innerHTML = "";
-  const groups = [["orig","原裝"],["nf","多空中性 nf_*"],["f100","論壇 f100"],["other","其他"]];
+  const groups = [["orig","原裝"],["nf","多空中性 nf_*"],["f100","論壇 f100"],["pl","倉管帖 ProfitLock"],["other","其他"]];
   for(const [g,label] of groups){
     const items = S.filter(s=>s.group===g);
     if(!items.length) continue;
