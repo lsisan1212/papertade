@@ -1,7 +1,7 @@
 {
  "meta": {
-  "generated_at": "2026-10-22 06:40:58 +0800",
-  "generated_ts": 1792622458,
+  "generated_at": "2026-10-22 07:02:01 +0800",
+  "generated_ts": 1792623721,
   "source": "/Users/leongsisan/Library/Application Support/bnpapertrade/position-mgmt-papertrade/data/仓位管理回测结果",
   "backtest_source": "/Users/leongsisan/Library/Application Support/bnpapertrade/logs/backtest_metrics.json",
   "n_accounts": 32,
