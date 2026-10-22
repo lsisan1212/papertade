@@ -88,6 +88,15 @@
   #explainPanel details pre{white-space:pre-wrap;font:11px/1.6 var(--mono);color:var(--fg3);margin:8px 0 0}
   .ex-tags{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
 
+  /* ---- 白話解釋：詳細段落 ---- */
+  .ex-label{font-size:10.5px;color:var(--fg3);letter-spacing:.8px;text-transform:uppercase;
+    margin:12px 0 4px;font-weight:600}
+  .ex-para{font-size:13px;line-height:1.9;color:var(--fg2);margin:0 0 10px}
+  .ex-terms{margin:2px 0 6px}
+  .ex-term{display:inline-block;background:var(--bg3);border:1px solid var(--line);border-radius:6px;
+    padding:4px 9px;margin:0 6px 6px 0;font-size:11.5px;line-height:1.6;color:var(--fg2)}
+  .ex-term b{color:var(--accent);margin-right:5px}
+
   /* ---- 密碼鎖 ---- */
   #lock{position:fixed;inset:0;z-index:1000;background:var(--bg);
     display:flex;align-items:center;justify-content:center;padding:20px}
@@ -194,7 +203,7 @@
     </div>
 
     <div class="panel" id="explainPanel">
-      <h2>白話解釋 <span class="muted" style="text-transform:none;letter-spacing:0">（跟住焦點帳戶）</span></h2>
+      <h2>白話解釋 <span class="muted" style="text-transform:none;letter-spacing:0">（入門版：短解 → 詳細白話 → 關鍵詞解碼 · 跟住焦點帳戶）</span></h2>
       <div id="explainBody"><p class="hint">點上面指標表任何一列，呢度會用白話講嗰個策略係乜嘢、點樣賺錢、有咩風險。</p></div>
     </div>
   </main>
@@ -535,198 +544,38 @@ function renderAll(){ renderList(); renderTable(); draw(); renderExplain(); }
 
 // ---------------------------------------------------------------- 白話解釋
 const GROUP_LABEL = {"orig":"原裝","nf":"多空中性 nf_*","f100":"論壇 f100","pl":"倉管帖 ProfitLock","other":"其他"};
-const EXPLAIN = {
-// ===== 原裝 =====
-"0m_2號氣泡固定5050": {
-  tldr: "一半錢做多「2號」強勢幣，一半錢做空「氣泡水」爆升幣，永遠固定 50/50，唔理市況。",
-  how: "2號（VWapBias_1200）專捉啱升勢嘅幣做多；氣泡水專捉爆升後回調嘅幣做空。一邊賺升、一邊賺跌，互相對沖，所以曲線比單邊策略穩。",
-  risk: "固定比例唔識避市——遇到單邊大行情（例如全市場爆升）做空嗰邊會大失血，回測最深回撤 -44%。"
-},
-"15m_2號氣泡填充": {
-  tldr: "同 2號+氣泡水，但多腿冇貨炒嗰陣，個倉自動交畀氣泡水補位（填充版）。",
-  how: "多腿 2號空倉時倉位唔會乾等，會分流去氣泡水，保持「始終有貨在場」，捉多啲機會。",
-  risk: "補位等於兩邊都偏做空屬性，大牛市會跑輸純多；回測最深回撤 -59.9%，比固定版深。"
-},
-// ===== nf_* 多空中性家族 =====
-"05m_nf_fill_pure_n": {
-  tldr: "多空 50/50 家族嘅最勁版：主策略有貨就用主策略，空倉嗰陣整條邊交畀氣泡水，而且每小時重新平衡保持 50/50（回測 NAV 652,878 / APY 1020%）。",
-  how: "多腿放歷史最勁嘅純多策略，空腿放氣泡水；任何一邊失衡就拉回 50/50，市場升跌都唔怕。",
-  risk: "「歸一化」要不斷調倉，震盪市會白白磨蝕手續費＋資金費；回測靚唔代表實盤一樣。"
-},
-"10m_nf_pair": {
-  tldr: "對照組：最原始嘅「冠軍多 + 氣泡水空」組合，冇填充、冇歸一化，用嚟比較其他 nf_* 改進咗啲咩。",
-  how: "就係咁簡單：多腿做主策略、空腿做氣泡水，比例由策略自己去漂。",
-  risk: "兩邊比例會不知不覺失衡（一邊賺晒一邊蝕晒），失去中性本意；實盤 NAV 跑贏唔少，但中性度會漂。"
-},
-"20m_nf_blend_static": {
-  tldr: "框架原生嘅保守版：唔理訊號，固定比例（30/30/20/20）分配，回測 Sharpe 3.057 係全家族最高。",
-  how: "用框架內置嘅固定比例倉位殼，多空各池按死比例分配，波動最低。",
-  risk: "報酬都相對平庸——穩係用低回報換返嚟。"
-},
-"25m_nf_fill_pure": {
-  tldr: "純切換版：主策略在場用主策略，主策略空倉嗰陣整條邊交畀氣泡水（冇歸一化）。",
-  how: "同 pure_n 嘅邏輯，但少一步每小時 50/50 重置，比例會自然漂。",
-  risk: "中性度會隨時間漂移；回測 NAV 144,801，波動比歸一化版大。"
-},
-"30m_nf_fill_70": {
-  tldr: "偏向主策略嘅組合：主策略 70%、氣泡水填充 30%。",
-  how: "多腿以主策略為主、氣泡水為輔，升市時食得多啲。",
-  risk: "偏多意味跌市更傷；回測 MDD -49.9%。"
-},
-"35m_nf_fill_50": {
-  tldr: "主策略同氣泡水平分天下（50/50），回測 MDD -38.9% 係家族最淺。",
-  how: "兩邊話事權一樣，對沖最均衡。",
-  risk: "回報亦被平均掉，唔會特別突出。"
-},
-"40m_nf_fill_50n": {
-  tldr: "50/50 分配 + 曝險歸一化，回測中性度 92.8%（曝險 0.491/0.494）——最中性嗰個。",
-  how: "除咗 50/50，每小時將多空實際曝險校準返 50/50。",
-  risk: "調倉頻繁，手續費／滑點成本高；行情急動時調倉會慢半拍。"
-},
-"45m_nf_fill_70n": {
-  tldr: "偏主策略（70/30）+ 曝險歸一化，回測 NAV 31,114、中性度 86.2%。",
-  how: "70% 跟主策略、30% 跟氣泡水，再將實際曝險校準。",
-  risk: "偏向多頭，跌市表現會差過 50/50 版。"
-},
-"50m_nf_fill_asym": {
-  tldr: "非對稱組合：多頭偏主策略、空頭偏氣泡水填充，本身結構就唔平衡。",
-  how: "實驗性質——測試「多空用唔同邏輯」會唔會更好。",
-  risk: "回測 NAV 13,784 係家族較低，實驗暫未跑出。"
-},
-"55m_nf_fill_lev": {
-  tldr: "歸一化 + 1.15 倍槓桿嘅放大版（曝險 0.564/0.568、中性度 90.6%）。",
-  how: "同 50n 一樣對沖，但整體放大 1.15 倍，賺蝕都放大。",
-  risk: "槓桿會放大回撤同資金費壓力，1.15x 唔算多但方向係危險嗰便。"
-},
-"0m_nf_fill_3leg": {
-  tldr: "三腿版：多、空、填充分開三條腿管理，比兩腿版更精細。",
-  how: "每條腿獨立計算曝險再匯總，等於多空各自再分主動/填充兩層。",
-  risk: "結構複雜＝參數多＝過擬合風險高，樣本外要觀察耐啲。"
-},
-// ===== f100 論壇因子復現 =====
-"05m_f100_02_A016A020": {
-  tldr: "復現論壇策略：用 Alpha016 + Alpha020 兩個經典量價因子打分，專買最強嗰批，8 小時調倉一次（純多）。",
-  how: "兩個因子量「短線動能」，分數高嘅幣買入、轉弱賣出，食動量延續嘅錢。",
-  risk: "純多＋動量因子，市場轉勢會連環止蝕；因子係公開嘅，用的人多會令效果衰減。"
-},
-"10m_f100_03_Akatsuki_RSI": {
-  tldr: "復現論壇網友 Akatsuki：RSI 與 Alpha 量價共振先至出手，8 小時調倉（純多）。",
-  how: "RSI 量超買超賣，配合 Alpha 因子過濾，專捉「動量＋情緒」同步嗰陣。",
-  risk: "共振訊號稀疏，空倉時間長；RSI 在單邊趨勢會長期背離不停出錯。"
-},
-"15m_f100_04_jiejian_BTCTrend": {
-  tldr: "借鑑版：Alpha016+020 因子，再加 BTC 大市趨勢過濾——BTC 弱市唔開工（8H）。",
-  how: "加密市場 90% 幣都跟 BTC 走，所以先用 BTC 趨勢決定做唔做，再做選幣。",
-  risk: "BTC 轉勢很快時過濾會滯後；牛市會跑輸唔設過濾嘅版本（避開啲大跌同時避開啲大升）。"
-},
-"20m_f100_05_CZ_dual": {
-  tldr: "CZ 版：Alpha016+020+APF 三重過濾，只集中做兩隻最強勢嘅幣（4H）。",
-  how: "層層過濾後極度集中，等如「精選兩隻全押」。",
-  risk: "集中度極高，一隻出事帳户重傷；4 小時調倉對交易成本都幾敏感。"
-},
-"25m_f100_06_Man_CCI": {
-  tldr: "Man 版：VWapBias + Alpha083 + CCI 三個指標，多空分離操作（20H 調倉）。",
-  how: "多空各自用唔同邏輯判斷，CCI 捉短線極端位，持倉 20 小時。",
-  risk: "多空分離喺趨勢不明嘅市會兩邊都捱打；參數多過其他 f100。"
-},
-"30m_f100_07_Polymarket": {
-  tldr: "Polymarket 版：Alpha016 + 動量regime + EMA 趨勢過濾（8H）。",
-  how: "先用 EMA 判斷市場處於咩 regime，再喺順風regime用因子選幣。",
-  risk: "regime 判斷錯就會成日轉倉；頻繁切换成本高。"
-},
-"35m_f100_08_Yuwen": {
-  tldr: "Yuwen 版：Alpha083 + VWapBias，空頭數量同多頭一樣（8H）——多空對稱。",
-  how: "同一個因子邏輯同時做多做空，選一樣數目嘅幣。",
-  risk: "加密市場長期偏多，對稱做空會喺牛市持續流血。"
-},
-"40m_f100_09_silva": {
-  tldr: "silva 版：VWapBias + Alpha020 兩個因子（8H），簡潔雙因子純多。",
-  how: "VWapBias 量價格離均線多遠、Alpha020 量動能，兩個夾埋選強勢幣。",
-  risk: "純多結構，熊市冇保護；雙因子相關性高，實際唔算獨立分散。"
-},
-"45m_f100_10_dayu": {
-  tldr: "大魚版：VWapBias + 四重後置過濾（8H）——出完訊號再經四道關卡先至落注。",
-  how: "寧缺毋濫：過完四重過濾嘅訊號先做，求勝率唔求量。",
-  risk: "過濾太多會錯失大量機會；回測靚但出場機會少，需要耐性。"
-},
-"50m_f100_11_huxiang": {
-  tldr: "虎香版：Alpha010/012/025 三因子 + RSI14（8H）。",
-  how: "三個不同週期嘅 Alpha 因子量唔同時間尺度嘅動能，RSI 做最後確認。",
-  risk: "因子多嘅策略容易過擬合——歷史靚、未來失靈係常事。"
-},
-// ===== 倉管帖 ProfitLock =====
-"55m_pl_long2_neutral": {
-  tldr: "倉管帖組裝：一條「賭狗」賺錢腿（2號後置過濾）+ 一條中性籃風控腿，再加自動倉位管理——賺1.5倍自動鎖利、回撤50%自動減倉。",
-  how: "賺錢時鎖住部分利潤唔吐返，虧損時自動縮細個倉，用倉位管理壓低回撤。回測 MDD 由 2號原策略 -50.2% 收窄到 -29.4%，Sharpe 1.76→2.08。",
-  risk: "鎖利同時鎖住咗部分上升空間——NAV 比單跑 2號 低（70 vs 115）；牛市會明顯跑輸進取版本。"
-},
-// ===== 其他 / QS 系列 =====
-"0m_combo4b": {
-  tldr: "四腿等權多空組合：小市值、非流動性、大幣動量、資金費率動量，各佔 25%，50% 做多 / 50% 做空。",
-  how: "四條腿用完全唔同嘅經濟邏輯搵錢（細市值高回報、非流動性溢價、大幣動量、資金費套利），多空對沖後市場中性。",
-  risk: "四腿都唔同市場，一旦流動性危機（例如 2022）全部一齊失效；等權唔等風險，要盯實。"
-},
-"0m_qs1_boil": {
-  tldr: "QS1 燒開水（純多）：絕大部分時間空倉，只有「72小時反彈≥0.3% 且全市場只有≤4%嘅幣達標」先至全倉出手。",
-  how: "等捱為主：市場靜嗰陣唔做，等到「反彈剛起步又未人氣爆」嗰個窄窗先至一次過全倉，食完就撤。",
-  risk: "回測 APY 298% 但 MDD -87%——出手次數極少，一擊錯就重傷；勝率只有 42.8%，靠食大波幅。"
-},
-"0m_qs5_happy": {
-  tldr: "QS5 快樂水（半多半空）：多腿燒開水 + 空腿氣泡水，各 50%，一邊等反彈一邊等爆升。",
-  how: "兩個「閘門式」訊號（反彈≥0.3 開多做 / 回撤≤0.2 開空做），50/50 平衡，兩邊機會都捉。",
-  risk: "兩邊閘門都窄，經常兩邊都空倉；MDD -64.8% 仍屬深回撤級別。"
-},
-"0m_qs15_sym": {
-  tldr: "QS15 對稱快樂水：多腿（62小時反彈≥0.2）同空腿（62小時回撤≤0.2）係嚴格鏡像，完全對稱。",
-  how: "同一組閾值、同一種邏輯，多空各半——市場向上向下都同一套打法。",
-  risk: "加密市場長年期偏多，嚴格對稱會令做空邊長期拖後腿；回測 NAV 346 係 QS 系列最低。"
-},
-"0m_qs1_boil_20": {
-  tldr: "燒開水 20% 版：訊號同 qs1_boil 一模一樣，但出手都只用 20% 資金，其餘 80% 現金。",
-  how: "保留燒開水「一擊脫手」嘅訊號時點，但將每次暴露縮到 20%——行情唔好靠空倉捱過去。",
-  risk: "報酬同比縮小约 80%（MDD 同比收窄）；出現大行情時會明顯跑輸滿倉版。"
-},
-"0m_qs5_happy_20": {
-  tldr: "快樂水 20% 版：訊號同 qs5_happy 一樣，多腿同空腿各只出 10% 曝險（合共 20%）。",
-  how: "同 20% 思路：訊號照出，倉位縮細。",
-  risk: "回報同比縮水；多空兩邊都細倉，對沖效果相對不明顯。"
-},
-"0m_qs15_sym_20": {
-  tldr: "對稱快樂水 20% 版：同 qs15_sym 訊號，多空腿各 10% 曝險。",
-  how: "嚴格對稱 + 縮細倉位，最保守嗰個 QS。",
-  risk: "回報最低，但對應回撤都最可控。"
-},
-"0m_cl2_V17": {
-  tldr: "沧浪亭2 V17：四腿大組合——都江堰（多30%）+ 四饼 BTC/ETH/SOL/BNB（多10%）+ 落单狗（空50%）+ 氣泡水（空10%），配自動再平衡＋槓桿限制。",
-  how: "多空兩邊各自幾條腿：多邊靠都江堰量能因子＋大幣基本盤，空邊靠落单狗量能異常＋氣泡水爆升回調。每 90 日定期再平衡、比例漂移超過 60% 即觸發調整；總槓桿限制 1.0–1.8 倍，淨敞口最多偏多 30% / 偏空 10%；空頭邊 1 小時內急跌急升超 10% 會凍結 4 小時避震。",
-  risk: "結構最複雜＝參數最多＝最需要樣本外驗證；空邊佔 60%，單邊逼空行情會大傷。"
-}
-};
-const EXPLAIN_FALLBACK = {
-  tldr: "呢個策略未有白話解釋（新帳戶？），以下係技術描述。",
-  how: "",
-  risk: ""
-};
+let EXPLAIN = {};   // 由 data/explain.json 載入（boot 時 fetch，每日 automation 唔覆蓋佢）
 function renderExplain(){
   const box = $("#explainBody");
   if(!box) return;
   const s = focusId ? stOf(focusId) : null;
   if(!s){
-    box.innerHTML = `<p class="hint">點上面指標表任何一列，呢度會用白話講嗰個策略係乜嘢、點樣賺錢、有咩風險。</p>`;
+    box.innerHTML = `<p class="hint">點上面指標表任何一列，呢度會用白話講嗰個策略係乜嘢、點樣賺錢、有咩風險——短解 → 詳細白話 → 關鍵詞解碼。</p>`;
     return;
   }
-  const e = EXPLAIN[s.id] || EXPLAIN_FALLBACK;
+  const e = EXPLAIN[s.id] || {};
   const g = GROUP_LABEL[s.group] || s.group;
   const esc = (t) => String(t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  const paras = (e.detail && e.detail.length)
+    ? e.detail.map(t => `<p class="ex-para">${esc(t)}</p>`).join("")
+    : `<p class="ex-para">（未有詳細白話——新帳戶？睇下面技術細節先。）</p>`;
+  const terms = (e.terms && e.terms.length)
+    ? `<div class="ex-terms"><div class="ex-label">關鍵詞解碼</div>` +
+      e.terms.map(t => `<span class="ex-term"><b>${esc(t[0])}</b>${esc(t[1])}</span>`).join("") + `</div>`
+    : "";
   const tech = (s.desc && s.desc.length)
-    ? `<details><summary>技術細節（來源：accounts/${esc(s.file)}.py）</summary><pre>${esc(s.desc.join("\n"))}</pre></details>` : "";
+    ? `<details><summary>技術細節（來源：accounts/${esc(s.file)}.py）</summary><pre>${esc(s.desc.join(String.fromCharCode(10)))}</pre></details>` : "";
   box.innerHTML = `
     <div class="ex-tags">
       <span class="tag" style="color:var(--accent);border-color:var(--accent)">${esc(s.label)}</span>
       <span class="tag">${esc(g)}</span>
       ${s.strategy_name ? `<span class="tag">strategy_name: ${esc(s.strategy_name)}</span>` : ""}
     </div>
-    <p class="ex-tldr">${esc(e.tldr)}</p>
+    <div class="ex-label">短解</div>
+    <p class="ex-tldr">${esc(e.tldr || "（未有短解）")}</p>
+    <div class="ex-label">詳細白話（入門級）</div>
+    ${paras}
+    ${terms}
     <div class="ex-grid">
       <div class="ex-box"><h3>💰 點樣賺錢</h3><p>${esc(e.how) || "（待補充）"}</p></div>
       <div class="ex-box"><h3>⚠️ 有咩風險</h3><p>${esc(e.risk) || "（待補充）"}</p></div>
@@ -814,6 +663,8 @@ $("#btnLock").onclick = () => { sessionStorage.removeItem("pt_unlocked"); locati
 
 // ---------------------------------------------------------------- boot
 async function boot(){
+  try { EXPLAIN = await fetch("data/explain.json").then(r => r.ok ? r.json() : {}); }
+  catch(_) { EXPLAIN = {}; }
   const [st, eq] = await Promise.all([
     fetch("data/strategies.json").then(r=>r.json()),
     fetch("data/equity.json").then(r=>r.json()),
