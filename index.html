@@ -96,6 +96,10 @@
   .ex-term{display:inline-block;background:var(--bg3);border:1px solid var(--line);border-radius:6px;
     padding:4px 9px;margin:0 6px 6px 0;font-size:11.5px;line-height:1.6;color:var(--fg2)}
   .ex-term b{color:var(--accent);margin-right:5px}
+  .tdot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;flex:none}
+  .ex-status{font-size:12.5px;line-height:1.7;color:var(--fg2);background:var(--bg3);
+    border:1px solid var(--line);border-radius:6px;padding:8px 11px;margin:8px 0 2px}
+  .ex-status b{color:var(--fg)}
 
   /* ---- 密碼鎖 ---- */
   #lock{position:fixed;inset:0;z-index:1000;background:var(--bg);
@@ -194,6 +198,14 @@
       <div class="chartwrap mid"><canvas id="cCoins"></canvas></div>
 
       <p class="hint" id="chartHint"></p>
+    </div>
+
+    <div class="panel">
+      <h2 style="margin-top:0">策略時機 <span class="muted" style="text-transform:none;letter-spacing:0">（而家係唔係開跑／加大嘅時機 · 全部由持倉數據實時算出 · 點列＝設焦點）</span></h2>
+      <div class="btnrow" id="timingSummary"></div>
+      <div style="overflow-x:auto"><table id="timingTbl"><thead></thead><tbody></tbody></table></div>
+      <p class="hint" id="timingHint"></p>
+      <details id="timingHow"><summary>點樣判斷？（數據説話，零預測）</summary><div id="timingHowBody"></div></details>
     </div>
 
     <div class="panel">
@@ -540,7 +552,98 @@ function draw(){
     : "未選擇任何策略 — 按「套用」取最佳 N 個，或由左邊揀。";
 }
 
-function renderAll(){ renderList(); renderTable(); draw(); renderExplain(); }
+function renderAll(){ renderList(); renderTable(); draw(); renderTiming(); renderExplain(); }
+
+// ---------------------------------------------------------------- 策略時機
+// 全部嚟自框架每小時記錄：symbol_long_num / symbol_short_num（持倉幣數）、
+// long/short_pos_value ÷ equity（曝險）、净值（30日報酬）。零預測成分。
+const TIMING_LEVELS = {
+  alert: {rank:5, dot:"#f85149", tag:"警訊"},
+  watch: {rank:4, dot:"#d29922", tag:"觀察"},
+  good:  {rank:3, dot:"#3fb950", tag:"順風"},
+  wait:  {rank:2, dot:"#58a6ff", tag:"等訊號"},
+  none:  {rank:0, dot:"#484f58", tag:"未開始"},
+};
+const isGate = (id) => /qs\d/.test(id);   // QS 系列＝閘門式：空倉屬常態
+function curState(s){
+  const e = EQ[s.id], m = s.metrics;
+  if(s.status!=="ok" || !m || !e || !e.nl || !e.nl.length)
+    return {level:"none", nl:null, ns:null, lr:null, sr:null, ret30:null, act:null, holding:false, why:"未有實盤數據"};
+  const n = e.dt.length;
+  const nl = e.nl[n-1] ?? 0;
+  const ns = (e.ns && e.ns.length ? (e.ns[n-1] ?? 0) : 0);
+  const lr = (e.lr && e.lr.length) ? e.lr[n-1] : null;
+  const sr = (e.sr && e.sr.length) ? e.sr[n-1] : null;
+  // 近 30 日（720h）報酬＋有貨時間佔比
+  const lastT = e.dt[n-1], cut = lastT - 720;
+  let i0 = n-1; while(i0 > 0 && e.dt[i0-1] >= cut) i0--;
+  const w = n - i0;
+  const navNow = e.nav[n-1], navThen = e.nav[i0];
+  const ret30 = (w >= 24 && navThen > 0) ? navNow/navThen - 1 : null;
+  let act = 0;
+  for(let i=i0;i<n;i++) if(((e.nl[i] ?? 0) + ((e.ns && e.ns[i]) ?? 0)) > 0) act++;
+  const actPct = w ? act/w : null;
+  const holding = (nl + ns) > 0;
+  const dd = m.dd_now;
+  let level, why;
+  if(!holding){
+    if(isGate(s.id)){ level="wait"; why="閘門未開、空倉等訊號——閘門式策略嘅常態，唔使理"; }
+    else { level="watch"; why="持續型策略但而家零持倉——查吓係訊號真空倉定異常"; }
+  } else if(ret30 !== null && ret30 <= -0.10 && dd !== null && dd <= -0.30){
+    level="alert"; why="有貨但 30 日報酬 " + (ret30*100).toFixed(1) + "% 兼回撤 " + (dd*100).toFixed(1) + "%——可能失效，認真評估減注";
+  } else if((ret30 !== null && ret30 < 0) || (dd !== null && dd <= -0.15)){
+    level="watch"; why="有貨運行中，但近期跑輸或回撤偏深——觀察多過加注";
+  } else {
+    level="good"; why="有貨運行中、近 30 日正回報、回撤可控——順風窗";
+  }
+  return {level, nl, ns, lr, sr, ret30, act:actPct, holding, why};
+}
+function renderTiming(){
+  const rows = S.filter(s=>s.status==="ok").map(s=>({s, t:curState(s)}));
+  rows.sort((a,b)=> TIMING_LEVELS[b.t.level].rank - TIMING_LEVELS[a.t.level].rank
+                    || a.s.label.localeCompare(b.s.label));
+  // 匯總：各燈號數量＋市場平均曝險
+  const cnt = {}; for(const k in TIMING_LEVELS) cnt[k]=0;
+  let sumL=0, sumS=0, nExp=0;
+  for(const {t} of rows){ cnt[t.level]++;
+    if(t.lr!==null && t.sr!==null){ sumL+=t.lr; sumS+=t.sr; nExp++; } }
+  $("#timingSummary").innerHTML =
+    `<span class="pill">可跑 ${rows.length}</span>` +
+    Object.keys(TIMING_LEVELS).filter(k=>cnt[k]>0).map(k=>
+      `<span class="pill"><span class="tdot" style="background:${TIMING_LEVELS[k].dot}"></span>${TIMING_LEVELS[k].tag} ${cnt[k]}</span>`).join("") +
+    (nExp ? `<span class="pill">市場平均曝險：多 ${(sumL/nExp*100).toFixed(0)}% / 空 ${(sumS/nExp*100).toFixed(0)}%</span>` : "");
+  const th = $("#timingTbl thead"), tb = $("#timingTbl tbody");
+  th.innerHTML = "<tr><th>策略</th><th>時機燈</th><th>而家持倉</th><th>曝險（多/空）</th><th>近30日</th><th>有貨時間</th><th style='text-align:left'>點解</th></tr>";
+  tb.innerHTML = rows.map(({s,t})=>{
+    const L = TIMING_LEVELS[t.level];
+    const holdTxt = (t.nl===null) ? "–" : `多 ${t.nl} / 空 ${t.ns}`;
+    const expTxt = (t.lr===null||t.sr===null) ? "–" : `${(t.lr*100).toFixed(0)}% / ${(t.sr*100).toFixed(0)}%`;
+    const rTxt = (t.ret30===null) ? "–" : `<span class="${t.ret30>=0?'pos':'neg'}">${(t.ret30*100).toFixed(1)}%</span>`;
+    const aTxt = (t.act===null) ? "–" : (t.act*100).toFixed(0)+"%";
+    return `<tr data-id="${s.id}" class="${s.id===focusId?' focus':''}">
+      <td>${s.label}</td>
+      <td><span class="tdot" style="background:${L.dot}"></span>${L.tag}</td>
+      <td>${holdTxt}</td><td class="muted">${expTxt}</td><td>${rTxt}</td><td class="muted">${aTxt}</td>
+      <td class="muted" style="text-align:left;white-space:normal">${t.why}</td>
+    </tr>`;
+  }).join("");
+  tb.querySelectorAll("tr").forEach(tr=>{
+    tr.onclick = () => { focusId = tr.dataset.id; selected = new Set([tr.dataset.id]); renderAll(); };
+  });
+  $("#timingHint").textContent =
+    `按嚴重程度排序（警訊 → 觀察 → 順風 → 等訊號）· 持倉／曝險取最新一個小時 · 近30日＝最新淨值 ÷ 30日前淨值 − 1 · 有貨時間＝近 30 日有持倉嘅小時佔比`;
+  $("#timingHowBody").innerHTML = `
+    <p class="ex-para"><b>原始數據</b>（全部嚟自框架每小時記錄，dashboard 零主觀加工）：每帳戶每小時記低
+    <b>持倉幣數</b>（多頭／空頭各有幾多隻）、<b>多空曝險</b>（持倉市值 ÷ 賬戶淨值）、<b>淨值</b>。</p>
+    <p class="ex-para"><b>「而家係咪開跑嘅時機」點樣答：</b></p>
+    <p class="ex-para">· <b>順風（綠燈）</b>：有貨運行中 ＋ 近 30 日報酬 ≥ 0 ＋ 回撤 &lt; 15% → 訊號開咗、暫時順風，可以考慮維持或加大。<br>
+    · <b>觀察（黃燈）</b>：有貨，但近 30 日報酬負數或回撤 ≥ 15% → 唔急住加，等形勢明朗。<br>
+    · <b>警訊（紅燈）</b>：有貨，但近 30 日報酬 ≤ −10% 兼回撤 ≥ 30% → 策略可能失效，認真評估減注／暫停。<br>
+    · <b>等訊號（藍燈）</b>：空倉。QS 系列（閘門式）99% 時間空倉屬常態；持續型策略罕有空倉，要查。<br>
+    · <b>未開始</b>：未跑過或數據缺。</p>
+    <p class="ex-para"><b>組合層面</b>：頂部「市場平均曝險」同各燈號數量，反映依家個市係旺（多策略有貨）定靜（閘門策略全部等緊）。</p>
+    <p class="ex-para" style="color:var(--warn)">⚠️ 免責：呢個係<b>狀態燈</b>唔係<b>預言師</b>——佢只答「策略而家運作狀態」，唔答「跟住會升定跌」。開唔開跑、加唔加大，最終係組合層面嘅決定。`;
+}
 
 // ---------------------------------------------------------------- 白話解釋
 const GROUP_LABEL = {"orig":"原裝","nf":"多空中性 nf_*","f100":"論壇 f100","pl":"倉管帖 ProfitLock","other":"其他"};
@@ -556,6 +659,14 @@ function renderExplain(){
   const e = EXPLAIN[s.id] || {};
   const g = GROUP_LABEL[s.group] || s.group;
   const esc = (t) => String(t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  // 而家狀態（即時由持倉數據計出）
+  const t = curState(s);
+  const statusLine = (t.level === "none") ? "" :
+    `<div class="ex-status"><span class="tdot" style="background:${TIMING_LEVELS[t.level].dot}"></span>` +
+    `<b>而家狀態</b>：${t.holding ? "有貨運行中" : "空倉"} · 多 ${t.nl} 幣 / 空 ${t.ns} 幣` +
+    (t.lr !== null && t.sr !== null ? ` · 曝險 多 ${(t.lr*100).toFixed(0)}% / 空 ${(t.sr*100).toFixed(0)}%` : "") +
+    (t.ret30 !== null ? ` · 近30日 <span class="${t.ret30>=0?'pos':'neg'}">${(t.ret30*100).toFixed(1)}%</span>` : "") +
+    ` — ${t.why}</div>`;
   const paras = (e.detail && e.detail.length)
     ? e.detail.map(t => `<p class="ex-para">${esc(t)}</p>`).join("")
     : `<p class="ex-para">（未有詳細白話——新帳戶？睇下面技術細節先。）</p>`;
@@ -571,6 +682,7 @@ function renderExplain(){
       <span class="tag">${esc(g)}</span>
       ${s.strategy_name ? `<span class="tag">strategy_name: ${esc(s.strategy_name)}</span>` : ""}
     </div>
+    ${statusLine}
     <div class="ex-label">短解</div>
     <p class="ex-tldr">${esc(e.tldr || "（未有短解）")}</p>
     <div class="ex-label">詳細白話（入門級）</div>
