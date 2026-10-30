@@ -62,8 +62,21 @@
   thead th.sorted::after{content:" ▾";color:var(--accent)}
   thead th.sorted.asc::after{content:" ▴"}
   tbody tr:hover{background:#1f6feb18}
-  tbody tr.dim{opacity:.35}
-  tbody tr.focus{box-shadow:inset 2px 0 0 var(--accent)}
+  tbody tr.dim{opacity:.3}
+  tbody tr.focus{box-shadow:inset 2px 0 0 var(--accent);background:#1f6feb22}
+  tbody tr.focus:hover{background:#1f6feb33}
+  tbody tr.focus td:first-child{font-weight:600;color:var(--accent)}
+  /* 策略名可點擊複製 */
+  td.copyname{cursor:copy}
+  td.copyname:hover{text-decoration:underline dotted}
+  td.copyname::after{content:"⧉";font-size:9px;color:var(--fg3);margin-left:5px;opacity:0}
+  td.copyname:hover::after{opacity:1}
+  /* toast */
+  #toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,12px);z-index:2000;
+    background:#1f6feb;color:#fff;font-size:12.5px;padding:7px 14px;border-radius:8px;
+    box-shadow:0 6px 24px #00000066;opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;
+    max-width:80vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #toast.show{opacity:1;transform:translate(-50%,0)}
   th.btcol,td.btcol{background:rgba(88,166,255,.06)}
   th.btcol{color:var(--accent)}
   .pos{color:var(--up)} .neg{color:var(--down)}
@@ -201,7 +214,7 @@
     </div>
 
     <div class="panel">
-      <h2 style="margin-top:0">策略時機 <span class="muted" style="text-transform:none;letter-spacing:0">（而家係唔係開跑／加大嘅時機 · 全部由持倉數據實時算出 · 點列＝設焦點）</span></h2>
+      <h2 style="margin-top:0">策略時機 <span class="muted" style="text-transform:none;letter-spacing:0">（而家係唔係開跑／加大嘅時機 · 全部由持倉數據實時算出 · 點列＝設焦點 · 點策略名＝複製）</span></h2>
       <div class="btnrow" id="timingSummary"></div>
       <div style="overflow-x:auto"><table id="timingTbl"><thead></thead><tbody></tbody></table></div>
       <p class="hint" id="timingHint"></p>
@@ -209,7 +222,7 @@
     </div>
 
     <div class="panel">
-      <h2 style="margin-top:0">指標表 <span class="muted" style="text-transform:none;letter-spacing:0">（點欄位排序 · 點列＝只看該策略並設為焦點）</span></h2>
+      <h2 style="margin-top:0">指標表 <span class="muted" style="text-transform:none;letter-spacing:0">（點欄位排序 · 點列＝只看該策略並設為焦點 · 點策略名＝複製）</span></h2>
       <div style="overflow-x:auto"><table id="tbl"><thead></thead><tbody></tbody></table></div>
       <p class="hint" id="tblHint"></p>
     </div>
@@ -220,6 +233,8 @@
     </div>
   </main>
 </div>
+
+<div id="toast"></div>
 
 <script>
 const PALETTE = ["#58a6ff","#f85149","#3fb950","#d29922","#bc8cff","#39c5cf","#ff7b72","#7ee787",
@@ -265,6 +280,46 @@ function colorOf(id){
 }
 const stOf = (id) => S.find(s=>s.id===id);
 const okList = () => S.filter(s=>s.status==="ok");
+
+// ---------------------------------------------------------------- 表格共用：高亮 / 複製
+// 兩張表都用同一套狀態：已選 → 正常顯示；未選 → 變暗；焦點 → 左側藍條 + 淡藍底
+const rowCls = (id) => (selected.has(id) ? "" : "dim") + (id === focusId ? " focus" : "");
+const selectOnly = (id) => { selected = new Set([id]); focusId = id; renderAll(); };
+
+let toastTimer = null;
+function showToast(msg){
+  const t = $("#toast"); if(!t) return;
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove("show"), 1500);
+}
+function copyStrategyName(name){
+  const done = () => showToast("已複製：" + name);
+  const fallback = () => {
+    const ta = document.createElement("textarea");
+    ta.value = name; ta.style.position="fixed"; ta.style.top="-1000px"; ta.style.opacity="0";
+    document.body.appendChild(ta); ta.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch(_) { ok = false; }
+    ta.remove();
+    ok ? done() : showToast("複製失敗，請手動選取");
+  };
+  if(navigator.clipboard && window.isSecureContext){
+    navigator.clipboard.writeText(name).then(done).catch(fallback);
+  } else fallback();
+}
+// 把表格第一欄接上「點名複製」＋ 點列只看單一策略
+function wireNameCells(tbody){
+  tbody.querySelectorAll("tr").forEach(tr=>{
+    tr.onclick = () => selectOnly(tr.dataset.id);
+    const td0 = tr.firstElementChild;
+    if(td0){
+      td0.classList.add("copyname");
+      td0.title = "點擊複製策略名：" + tr.dataset.id;
+      td0.onclick = (e) => { e.stopPropagation(); copyStrategyName(tr.dataset.id); selectOnly(tr.dataset.id); };
+    }
+  });
+}
 
 // ---------------------------------------------------------------- 序列
 function buildPts(id, key){
@@ -392,11 +447,10 @@ function renderTable(){
   });
   tb.innerHTML = rows0.map(s=>{
     const m = s.metrics, b = s.backtest;
-    const on = selected.has(s.id);
     const n = (v,d=4)=> (v===null||v===undefined||isNaN(v)) ? "–" : Number(v).toFixed(d);
     const p = (v,d=2)=> (v===null||v===undefined||isNaN(v)) ? "–" : (v*100).toFixed(d)+"%";
     const c = (v)=> (v===null||v===undefined||isNaN(v)) ? "muted" : (v>0?"pos":(v<0?"neg":"muted"));
-    return `<tr data-id="${s.id}" class="${on?'':'dim'}${s.id===focusId?' focus':''}">
+    return `<tr data-id="${s.id}" class="${rowCls(s.id)}">
       <td><span class="sw" style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${s.status==="ok"?colorOf(s.id):'#484f58'};margin-right:6px"></span>${s.label}</td>
       <td class="muted">${s.time}</td>
       <td class="btcol">${n(b&&b.nav,0)}</td>
@@ -419,10 +473,7 @@ function renderTable(){
       <td class="muted">${n(m&&m.days,0)}</td>
     </tr>`;
   }).join("");
-  tb.querySelectorAll("tr").forEach(tr=>{
-    tr.onclick = () => { const id = tr.dataset.id;
-      selected = new Set([id]); focusId = id; renderAll(); };
-  });
+  wireNameCells(tb);
   const nBt = S.filter(s=>s.backtest).length;
   $("#tblHint").innerHTML =
     `<b>回測</b>＝首次回測（2021–2026，按 accounts docstring / neutral_ranked.csv），` +
@@ -620,16 +671,14 @@ function renderTiming(){
     const expTxt = (t.lr===null||t.sr===null) ? "–" : `${(t.lr*100).toFixed(0)}% / ${(t.sr*100).toFixed(0)}%`;
     const rTxt = (t.ret30===null) ? "–" : `<span class="${t.ret30>=0?'pos':'neg'}">${(t.ret30*100).toFixed(1)}%</span>`;
     const aTxt = (t.act===null) ? "–" : (t.act*100).toFixed(0)+"%";
-    return `<tr data-id="${s.id}" class="${s.id===focusId?' focus':''}">
+    return `<tr data-id="${s.id}" class="${rowCls(s.id)}">
       <td>${s.label}</td>
       <td><span class="tdot" style="background:${L.dot}"></span>${L.tag}</td>
       <td>${holdTxt}</td><td class="muted">${expTxt}</td><td>${rTxt}</td><td class="muted">${aTxt}</td>
       <td class="muted" style="text-align:left;white-space:normal">${t.why}</td>
     </tr>`;
   }).join("");
-  tb.querySelectorAll("tr").forEach(tr=>{
-    tr.onclick = () => { focusId = tr.dataset.id; selected = new Set([tr.dataset.id]); renderAll(); };
-  });
+  wireNameCells(tb);
   $("#timingHint").textContent =
     `按嚴重程度排序（警訊 → 觀察 → 順風 → 等訊號）· 持倉／曝險取最新一個小時 · 近30日＝最新淨值 ÷ 30日前淨值 − 1 · 有貨時間＝近 30 日有持倉嘅小時佔比`;
   $("#timingHowBody").innerHTML = `
