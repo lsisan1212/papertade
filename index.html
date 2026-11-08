@@ -163,9 +163,11 @@
       <button data-sel="all">全選</button>
       <button data-sel="none">清空</button>
       <button data-sel="orig">原裝</button>
-      <button data-sel="nf">nf_*</button>
-      <button data-sel="f100">f100</button>
-      <button data-sel="pl">倉管</button>
+      <button data-sel="nf">多空中性</button>
+      <button data-sel="f100">論壇策略</button>
+      <button data-sel="pl">倉管帖</button>
+      <button data-sel="other">自選組合</button>
+      <button id="btnCode" title="切換顯示技術代號／中文名">顯示代號</button>
     </div>
     <div id="list"></div>
     <p class="hint" id="asideHint"></p>
@@ -175,7 +177,7 @@
     <div class="panel">
       <div class="btnrow">
         <span class="lbl">顯示最佳</span>
-        <input id="topN" type="number" value="5" min="1" max="23">
+        <input id="topN" type="number" value="5" min="1" max="31">
         <span class="lbl">個（按</span>
         <select id="bestBy">
           <option value="ret">實盤累積報酬</option>
@@ -280,6 +282,13 @@ function colorOf(id){
 }
 const stOf = (id) => S.find(s=>s.id===id);
 const okList = () => S.filter(s=>s.status==="ok");
+// 對外一律顯示中文名；想對返框架代號就按「顯示代號」。
+let showCode = false;
+const disp = (s) => s ? (showCode ? s.id : s.label) : "";
+const dispId = (id) => id ? disp(stOf(id)) || id : "";
+const descOf = (id) => (EXPLAIN[id] || {}).tldr || "";
+const escHtml = (t) => String(t).replace(/&/g,"&amp;").replace(/</g,"&lt;")
+                    .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 
 // ---------------------------------------------------------------- 表格共用：高亮 / 複製
 // 兩張表都用同一套狀態：已選 → 正常顯示；未選 → 變暗；焦點 → 左側藍條 + 淡藍底
@@ -315,8 +324,8 @@ function wireNameCells(tbody){
     const td0 = tr.firstElementChild;
     if(td0){
       td0.classList.add("copyname");
-      td0.title = "點擊複製策略名：" + tr.dataset.id;
-      td0.onclick = (e) => { e.stopPropagation(); copyStrategyName(tr.dataset.id); selectOnly(tr.dataset.id); };
+      td0.title = "點擊複製策略名：" + dispId(tr.dataset.id);
+      td0.onclick = (e) => { e.stopPropagation(); copyStrategyName(dispId(tr.dataset.id)); selectOnly(tr.dataset.id); };
     }
   });
 }
@@ -369,7 +378,7 @@ function basePlugins(unitFmt){
 function renderList(){
   rebuildOrder();
   const box = $("#list"); box.innerHTML = "";
-  const groups = [["orig","原裝"],["nf","多空中性 nf_*"],["f100","論壇 f100"],["pl","倉管帖 ProfitLock"],["other","其他"]];
+  const groups = [["orig","原裝兩組"],["nf","多空中性"],["f100","論壇策略"],["pl","倉管帖"],["other","自選組合"]];
   for(const [g,label] of groups){
     const items = S.filter(s=>s.group===g);
     if(!items.length) continue;
@@ -384,8 +393,9 @@ function renderList(){
       const mt = pending
         ? (b ? `回測 ${(b.apy*100).toFixed(0)}%` : "未開始")
         : `${(m.nav).toFixed(3)} / ${(m.cagr_on_sample*100).toFixed(0)}%`;
+      const tip = `${s.label}\n${descOf(s.id)}\n內部代號：${s.id}${b?'　回測淨值 '+Number(b.nav).toLocaleString()+' 倍':''}`;
       d.innerHTML = `<span class="sw" style="background:${pending?'#484f58':colorOf(s.id)}"></span>
-                     <span class="nm" title="${s.id}${b?'　回測 NAV '+Number(b.nav).toLocaleString():''}">${s.label}</span>
+                     <span class="nm" title="${escHtml(tip)}">${escHtml(disp(s))}</span>
                      <span class="mt ${pending?'':cls(m&&m.total_return)}">${mt}</span>`;
       if(!pending){
         d.onclick = () => {
@@ -399,12 +409,12 @@ function renderList(){
     }
   }
   $("#asideHint").textContent =
-    `可選 ${okList().length} 個 · 已選 ${selected.size} 個 · 焦點 ${focusId || "–"}`;
+    `可選 ${okList().length} 個 · 已選 ${selected.size} 個 · 焦點 ${focusId ? dispId(focusId) : "–"} · 滑鼠停喺名上睇白話解說`;
 }
 
 // ---------------------------------------------------------------- 表格
 const COLS = [
-  ["label","策略",(s)=>s.label,false],
+  ["label","策略",(s)=>disp(s),false],
   ["time","時點",(s)=>s.time,false],
   ["bt_nav","回測 NAV",(s)=>s.backtest?s.backtest.nav:null,true,"bt"],
   ["bt_apy","回測 APY",(s)=>s.backtest?s.backtest.apy:null,true,"bt"],
@@ -451,7 +461,7 @@ function renderTable(){
     const p = (v,d=2)=> (v===null||v===undefined||isNaN(v)) ? "–" : (v*100).toFixed(d)+"%";
     const c = (v)=> (v===null||v===undefined||isNaN(v)) ? "muted" : (v>0?"pos":(v<0?"neg":"muted"));
     return `<tr data-id="${s.id}" class="${rowCls(s.id)}">
-      <td><span class="sw" style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${s.status==="ok"?colorOf(s.id):'#484f58'};margin-right:6px"></span>${s.label}</td>
+      <td><span class="sw" style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${s.status==="ok"?colorOf(s.id):'#484f58'};margin-right:6px"></span>${escHtml(disp(s))}</td>
       <td class="muted">${s.time}</td>
       <td class="btcol">${n(b&&b.nav,0)}</td>
       <td class="btcol ${c(b&&b.apy)}">${p(b&&b.apy,1)}</td>
@@ -489,11 +499,11 @@ function renderFocusSel(){
   if(focusId && !ids.includes(focusId)) focusId = ids[0] || null;
   if(!focusId) focusId = ids[0] || null;
   sel.innerHTML = ids.length
-    ? ids.map(id=>`<option value="${id}"${id===focusId?" selected":""}>${id}</option>`).join("")
+    ? ids.map(id=>`<option value="${id}"${id===focusId?" selected":""}>${escHtml(dispId(id))}</option>`).join("")
     : `<option value="">（未選策略）</option>`;
   sel.disabled = !ids.length;
-  $("#capRatioAcc").textContent = focusId || "（未選）";
-  $("#capCoinAcc").textContent  = focusId || "（未選）";
+  $("#capRatioAcc").textContent = focusId ? dispId(focusId) : "（未選）";
+  $("#capCoinAcc").textContent  = focusId ? dispId(focusId) : "（未選）";
 }
 
 function drawNav(){
@@ -504,13 +514,13 @@ function drawNav(){
   const sets = [];
   // 焦點帳戶的回撤放最前（畫在最底層），避免遮住淨值曲線
   if(focusId && ids.includes(focusId)){
-    sets.push({label: focusId + " 回撤", data: P(focusId,"dd"), borderColor:"#565e68",
+    sets.push({label: dispId(focusId) + " 回撤", data: P(focusId,"dd"), borderColor:"#565e68",
       backgroundColor:"#565e68", borderWidth:0.9, borderDash:[4,3], pointRadius:0, yAxisID:"y1"});
   }
   for(let k=0;k<ids.length;k++){
     const id = ids[k];
     sets.push({
-      label: id, data: P(id,key), borderColor: colorOf(id), backgroundColor: colorOf(id),
+      label: dispId(id), data: P(id,key), borderColor: colorOf(id), backgroundColor: colorOf(id),
       borderWidth: 1.5, borderDash: dashFor(k), pointRadius: 0, pointHitRadius: 6,
       tension: 0, spanGaps: true, yAxisID: "y",
     });
@@ -594,12 +604,12 @@ function draw(){
   const fs = focusId ? stOf(focusId) : null;
   const fm = fs && fs.metrics;
   $("#capNavFocus").textContent = (fs && fm)
-    ? `${fs.id}：NAV ${fm.nav.toFixed(4)}（${(fm.total_return*100).toFixed(2)}%）· MDD ${(fm.mdd*100).toFixed(2)}% · 當前回撤 ${(fm.dd_now*100).toFixed(2)}%`
+    ? `${disp(fs)}：NAV ${fm.nav.toFixed(4)}（${(fm.total_return*100).toFixed(2)}%）· MDD ${(fm.mdd*100).toFixed(2)}% · 當前回撤 ${(fm.dd_now*100).toFixed(2)}%`
     : "（未選焦點）";
   const n = S.filter(s=>s.status==="ok" && selected.has(s.id)).length;
   const b = focusId ? EQ[focusId] : null;
   $("#chartHint").textContent = n
-    ? `${n} 條淨值曲線 · 焦點 ${focusId}${b && b.decimated ? `（曲線抽稀 ${b.kept}/${b.full_bars} 點）` : ""} · 範圍 ${rangeKey==="all"?"全部":rangeKey+" 天"}`
+    ? `${n} 條淨值曲線 · 焦點 ${dispId(focusId)}${b && b.decimated ? `（曲線抽稀 ${b.kept}/${b.full_bars} 點）` : ""} · 範圍 ${rangeKey==="all"?"全部":rangeKey+" 天"}`
     : "未選擇任何策略 — 按「套用」取最佳 N 個，或由左邊揀。";
 }
 
@@ -672,7 +682,7 @@ function renderTiming(){
     const rTxt = (t.ret30===null) ? "–" : `<span class="${t.ret30>=0?'pos':'neg'}">${(t.ret30*100).toFixed(1)}%</span>`;
     const aTxt = (t.act===null) ? "–" : (t.act*100).toFixed(0)+"%";
     return `<tr data-id="${s.id}" class="${rowCls(s.id)}">
-      <td>${s.label}</td>
+      <td>${escHtml(disp(s))}</td>
       <td><span class="tdot" style="background:${L.dot}"></span>${L.tag}</td>
       <td>${holdTxt}</td><td class="muted">${expTxt}</td><td>${rTxt}</td><td class="muted">${aTxt}</td>
       <td class="muted" style="text-align:left;white-space:normal">${t.why}</td>
@@ -695,7 +705,7 @@ function renderTiming(){
 }
 
 // ---------------------------------------------------------------- 白話解釋
-const GROUP_LABEL = {"orig":"原裝","nf":"多空中性 nf_*","f100":"論壇 f100","pl":"倉管帖 ProfitLock","other":"其他"};
+const GROUP_LABEL = {"orig":"原裝兩組","nf":"多空中性","f100":"論壇策略","pl":"倉管帖","other":"自選組合"};
 let EXPLAIN = {};   // 由 data/explain.json 載入（boot 時 fetch，每日 automation 唔覆蓋佢）
 function renderExplain(){
   const box = $("#explainBody");
@@ -723,13 +733,15 @@ function renderExplain(){
     ? `<div class="ex-terms"><div class="ex-label">關鍵詞解碼</div>` +
       e.terms.map(t => `<span class="ex-term"><b>${esc(t[0])}</b>${esc(t[1])}</span>`).join("") + `</div>`
     : "";
+  const techHead = `內部代號：${s.id}\n技術名稱：${s.strategy_name || "—"}\n設定檔：accounts/${s.file}.py\n\n`;
   const tech = (s.desc && s.desc.length)
-    ? `<details><summary>技術細節（來源：accounts/${esc(s.file)}.py）</summary><pre>${esc(s.desc.join(String.fromCharCode(10)))}</pre></details>` : "";
+    ? `<details><summary>技術細節＋內部代號（撳開先睇）</summary><pre>${esc(techHead + s.desc.join(String.fromCharCode(10)))}</pre></details>`
+    : `<details><summary>技術細節＋內部代號（撳開先睇）</summary><pre>${esc(techHead)}</pre></details>`;
   box.innerHTML = `
     <div class="ex-tags">
-      <span class="tag" style="color:var(--accent);border-color:var(--accent)">${esc(s.label)}</span>
+      <span class="tag" style="color:var(--accent);border-color:var(--accent)">${esc(disp(s))}</span>
       <span class="tag">${esc(g)}</span>
-      ${s.strategy_name ? `<span class="tag">strategy_name: ${esc(s.strategy_name)}</span>` : ""}
+      ${showCode ? `<span class="tag">代號：${esc(s.id)}</span>` : ""}
     </div>
     ${statusLine}
     <div class="ex-label">短解</div>
@@ -789,6 +801,13 @@ document.querySelectorAll("[data-sel]").forEach(b=>{
   };
 });
 $("#applyBest").onclick = applyBest;
+$("#btnCode").onclick = () => {
+  showCode = !showCode;
+  const b = $("#btnCode");
+  b.textContent = showCode ? "顯示中文名" : "顯示代號";
+  b.classList.toggle("on", showCode);
+  renderAll();
+};
 $("#focusSel").onchange = (e) => { focusId = e.target.value || null; renderAll(); };
 
 // ---------------------------------------------------------------- 密碼鎖

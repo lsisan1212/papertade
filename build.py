@@ -44,13 +44,66 @@ BT_PATH = LOGS / "backtest_metrics.json"       # 首次回測指標（2021–202
 OUT_DIR = Path(__file__).resolve().parent
 DATA_DIR = OUT_DIR / "data"
 
-# 分組（顯示用）
+# 分組（顯示用）— 全部用中文，唔好再露 nf_* / f100 / pl 呢類代號
 GROUP_LABEL = {
-    "orig": "原裝",
-    "nf": "多空中性 nf_*",
-    "f100": "論壇 f100",
-    "pl": "倉管帖 ProfitLock",
-    "other": "其他",
+    "orig": "原裝兩組",
+    "nf": "多空中性",
+    "f100": "論壇策略",
+    "pl": "倉管帖",
+    "other": "自選組合",
+}
+
+# ---------------------------------------------------------------- 中文策略名
+# 單一來源：id（框架帳戶代號）→ 人看得明嘅中文名。
+# 依據 = accounts/*.py 嘅腿結構 / docstring + data/explain.json 嘅白話短解。
+# 代號仍然保留喺 s.code（同 s.id），網站只係「顯示」時唔再用佢。
+# 加新帳戶時喺度加一行；漏咗會自動退回代號並喺 build 輸出警告。
+CN_NAMES = {
+    # 原裝
+    "0m_2號氣泡固定5050": "原裝・2號氣泡對半",
+    "15m_2號氣泡填充":   "原裝・2號氣泡補位",
+    # 多空中性
+    "05m_nf_fill_pure_n": "中性・純填充歸一",
+    "10m_nf_pair":        "中性・原始對照",
+    "20m_nf_blend_static": "中性・四池固定",
+    "25m_nf_fill_pure":   "中性・純填充",
+    "30m_nf_fill_70":     "中性・主七填三",
+    "35m_nf_fill_50":     "中性・主填各半",
+    "40m_nf_fill_50n":    "中性・各半歸一",
+    "45m_nf_fill_70n":    "中性・七三歸一",
+    "50m_nf_fill_asym":   "中性・多空不對稱",
+    "55m_nf_fill_lev":    "中性・槓桿放大",
+    "0m_nf_fill_3leg":    "中性・三腿分開",
+    # 論壇策略復現
+    "05m_f100_02_A016A020":        "論壇・雙動量純多",
+    "10m_f100_03_Akatsuki_RSI":    "論壇・量價共振",
+    "15m_f100_04_jiejian_BTCTrend": "論壇・大市趨勢過濾",
+    "20m_f100_05_CZ_dual":         "論壇・強勢雙幣",
+    "25m_f100_06_Man_CCI":         "論壇・三指標多空",
+    "30m_f100_07_Polymarket":      "論壇・動能趨勢過濾",
+    "35m_f100_08_Yuwen":           "論壇・多空對稱",
+    "40m_f100_09_silva":           "論壇・雙因子純多",
+    "45m_f100_10_dayu":            "論壇・大魚四重過濾",
+    "50m_f100_11_huxiang":         "論壇・虎香三因子",
+    # 倉管帖
+    "55m_pl_long2_neutral": "倉管・2號＋中性鎖利",
+    # 自選組合
+    "0m_cl1_26v6":       "滄浪亭1・四腿漂移",
+    "0m_cl1_2526v6":     "滄浪亭1・四腿填充",
+    "0m_cl1_26v6_x095":  "滄浪亭1・調參強化",
+    "0m_cl2_V17":        "滄浪亭2・四腿再平衡",
+    "0m_cl2_26v3":       "滄浪亭2・五腿填充",
+    "0m_dxq_26v4":       "都江堰・四腿固定",
+    "0m_dxq_2526v3":     "都江堰・四腿填充",
+    "0m_cta6040":        "六四書・滄浪亭＋浪淘沙",
+    # 已停用但歷史曲線可能仲喺度
+    "0m_combo4b":        "自選・四腿等權",
+    "0m_qs1_boil":       "燒開水・純多等反彈",
+    "0m_qs5_happy":      "快樂水・多半空半",
+    "0m_qs15_sym":       "對稱快樂水",
+    "0m_qs1_boil_20":    "燒開水・兩成資金",
+    "0m_qs5_happy_20":   "快樂水・兩成資金",
+    "0m_qs15_sym_20":    "對稱快樂水・兩成資金",
 }
 
 
@@ -299,6 +352,11 @@ def main() -> int:
     accounts = read_accounts()
     bt_table = load_backtest()
     print(f"ACCOUNTS（runner）: {len(accounts)} 個")
+    missing_cn = [a["name"] for a in accounts if a["name"] not in CN_NAMES]
+    if missing_cn:
+        print(f"⚠️ 未有中文名（會顯示返代號）: {len(missing_cn)}")
+        for n in missing_cn:
+            print(f"  · {n}")
     print(f"回測指標表        : {len(bt_table)} 個帳戶")
     print(f"EQUITY_ROOT       : {EQUITY_ROOT}")
     print(f"exists            : {EQUITY_ROOT.exists()}")
@@ -314,7 +372,8 @@ def main() -> int:
         bt = bt_table.get(name) or {}
         base = {
             "id": name,
-            "label": name,
+            "code": name,                       # 技術代號（網頁可切換顯示）
+            "label": CN_NAMES.get(name, name),  # 對外一律顯示中文名
             "group": classify(name),
             "group_label": GROUP_LABEL[classify(name)],
             "file": a["file"],
